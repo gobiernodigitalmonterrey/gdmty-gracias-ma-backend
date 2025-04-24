@@ -46,12 +46,19 @@ Si necesitas cambiar estas credenciales, modifica el archivo `app/db/database.py
 SQLALCHEMY_DATABASE_URL = "mysql+mysqlconnector://usuario:contraseña@host/gracias_ma"
 ```
 
+## Creacion de archivo .env para las credenciales de GCP
+
+```
+PATH_KEYS_JSON=/Users/martin/Desktop/SIGA/gdmty-gracias-ma-backend/app/keys/god-datastore-dev-24292c5052e8.json
+BUCKET_NAME=god-gracias-ma
+```
+
 ## Ejecución del proyecto
 
 1. Iniciar el servidor de desarrollo:
 
 ```bash
-uvicorn main:app --reload
+python -m dotenv run -- uvicorn main:app --reload
 ```
 
 ## Ejecutar el proyecto con Dockerfile
