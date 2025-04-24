@@ -1,54 +1,68 @@
+import os
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
+from google.cloud import storage
+from google.oauth2 import service_account
 from app.db.models import Formulario as FormularioModel
 from app.schemas import FormularioMultipart as FormularioSchema
-from fastapi import HTTPException
-import os
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# Configuración de GCP
+GOOGLE_CREDENTIALS_PATH = os.getenv('PATH_KEYS_JSON', '')
+BUCKET_NAME = os.getenv('BUCKET_NAME', '')
+credentials = service_account.Credentials.from_service_account_file(GOOGLE_CREDENTIALS_PATH)
+storage_client = storage.Client(credentials=credentials)
+bucket = storage_client.get_bucket(BUCKET_NAME)
 
-
-def validar_formulario(formulario: FormularioSchema):
-    if len(formulario.curp) != 18:
+# Validación simple
+def validar_formulario(form: FormularioSchema):
+    if len(form.curp) != 18:
         raise HTTPException(status_code=400, detail="La CURP debe tener 18 caracteres")
-    if len(formulario.telefono) != 10:
+    if len(form.telefono) != 10:
         raise HTTPException(status_code=400, detail="El teléfono debe tener 10 dígitos")
-    if not (10000 <= formulario.codigo_postal <= 99999):
+    if not (10000 <= form.codigo_postal <= 99999):
         raise HTTPException(status_code=400, detail="El código postal debe tener 5 dígitos")
 
-
-async def guardar_archivo(file, filename):
+# Subida de archivo individual
+async def subir_archivo(file, filename):
     if not file:
         return None
-    path = os.path.join(UPLOAD_DIR, filename)
-    with open(path, "wb") as f:
-        f.write(await file.read())
-    return path
+    blob = bucket.blob(filename)
+    blob.upload_from_file(file.file, content_type=file.content_type)
+    blob.make_public()
+    return f"https://storage.googleapis.com/{BUCKET_NAME}/{filename}"
 
-
+# Crear y guardar formulario
 async def create_formulario(formulario: FormularioSchema, db: Session):
     validar_formulario(formulario)
 
-    ine_frontal_path = await guardar_archivo(formulario.ine_frontal, f"{formulario.curp}_ine_frontal.{formulario.ine_frontal.filename.split('.')[-1]}") if formulario.ine_frontal else None
-    ine_reverso_path = await guardar_archivo(formulario.ine_reverso, f"{formulario.curp}_ine_reverso.{formulario.ine_reverso.filename.split('.')[-1]}") if formulario.ine_reverso else None
-    acta_nacimiento_path = await guardar_archivo(formulario.acta_nacimiento, f"{formulario.curp}_acta.{formulario.acta_nacimiento.filename.split('.')[-1]}") if formulario.acta_nacimiento else None
-
-    campos_formulario = formulario.dict(exclude_unset=True)
-    campos_formulario.update({
-        "ine_frontal": ine_frontal_path,
-        "ine_reverso": ine_reverso_path,
-        "acta_nacimiento": acta_nacimiento_path
-    })
-
-    nuevo_formulario = FormularioModel(**campos_formulario)
+    campos = formulario.dict(exclude_unset=True)
+    campos.update({"ine_frontal": None, "ine_reverso": None, "acta_nacimiento": None})
+    nuevo_formulario = FormularioModel(**campos)
 
     try:
         db.add(nuevo_formulario)
         db.commit()
         db.refresh(nuevo_formulario)
+
+        # Subida de archivos
+        uploads = {
+            "ine_frontal": formulario.ine_frontal,
+            "ine_reverso": formulario.ine_reverso,
+            "acta_nacimiento": formulario.acta_nacimiento,
+        }
+
+        for campo, archivo in uploads.items():
+            if archivo:
+                ext = archivo.filename.split('.')[-1]
+                filename = f"{formulario.curp}_{campo}.{ext}"
+                url = await subir_archivo(archivo, filename)
+                setattr(nuevo_formulario, campo, url)
+
+        db.commit()
+        db.refresh(nuevo_formulario)
+
         return {"mensaje": "Formulario registrado con éxito", "id": nuevo_formulario.id}
+
     except Exception as e:
-        for path in [ine_frontal_path, ine_reverso_path, acta_nacimiento_path]:
-            if path and os.path.exists(path):
-                os.remove(path)
+        db.rollback()
         raise HTTPException(status_code=400, detail=f"Error al registrar formulario: {str(e)}")
