@@ -8,55 +8,39 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-async def create_formulario(formulario: FormularioSchema ,db: Session):
-    # Validar CURP (18 caracteres)
+def validar_formulario(formulario: FormularioSchema):
     if len(formulario.curp) != 18:
         raise HTTPException(status_code=400, detail="La CURP debe tener 18 caracteres")
-
-    # Validar teléfono (10 dígitos)
     if len(formulario.telefono) != 10:
         raise HTTPException(status_code=400, detail="El teléfono debe tener 10 dígitos")
-
-    # Validar código postal (5 dígitos)
-    if formulario.codigo_postal < 10000 or formulario.codigo_postal > 99999:
+    if not (10000 <= formulario.codigo_postal <= 99999):
         raise HTTPException(status_code=400, detail="El código postal debe tener 5 dígitos")
 
-    # Guardar archivos si fueron proporcionados
-    ine_frontal_path = None
-    ine_reverso_path = None
-    acta_nacimiento_path = None
 
-    if formulario.ine_frontal:
-        ine_frontal_path = f"{UPLOAD_DIR}/{formulario.curp}_ine_frontal.{formulario.ine_frontal.filename.split('.')[-1]}"
-        with open(ine_frontal_path, "wb") as f:
-            f.write(await formulario.ine_frontal.read())
+async def guardar_archivo(file, filename):
+    if not file:
+        return None
+    path = os.path.join(UPLOAD_DIR, filename)
+    with open(path, "wb") as f:
+        f.write(await file.read())
+    return path
 
-    if formulario.ine_reverso:
-        ine_reverso_path = f"{UPLOAD_DIR}/{formulario.curp}_ine_reverso.{formulario.ine_reverso.filename.split('.')[-1]}"
-        with open(ine_reverso_path, "wb") as f:
-            f.write(await formulario.ine_reverso.read())
 
-    if formulario.acta_nacimiento:
-        acta_nacimiento_path = f"{UPLOAD_DIR}/{formulario.curp}_acta.{formulario.acta_nacimiento.filename.split('.')[-1]}"
-        with open(acta_nacimiento_path, "wb") as f:
-            f.write(await formulario.acta_nacimiento.read())
+async def create_formulario(formulario: FormularioSchema, db: Session):
+    validar_formulario(formulario)
 
-    # Crear nuevo registro en la base de datos
-    nuevo_formulario = FormularioModel(
-        nombre=formulario.nombre,
-        apellido_paterno=formulario.apellido_paterno,
-        apellido_materno=formulario.apellido_materno,
-        curp=formulario.curp,
-        correo_electronico=formulario.correo_electronico,
-        telefono=formulario.telefono,
-        calle=formulario.calle,
-        numero=formulario.numero,
-        colonia=formulario.colonia,
-        codigo_postal=formulario.codigo_postal,
-        ine_frontal=ine_frontal_path,
-        ine_reverso=ine_reverso_path,
-        acta_nacimiento=acta_nacimiento_path
-    )
+    ine_frontal_path = await guardar_archivo(formulario.ine_frontal, f"{formulario.curp}_ine_frontal.{formulario.ine_frontal.filename.split('.')[-1]}") if formulario.ine_frontal else None
+    ine_reverso_path = await guardar_archivo(formulario.ine_reverso, f"{formulario.curp}_ine_reverso.{formulario.ine_reverso.filename.split('.')[-1]}") if formulario.ine_reverso else None
+    acta_nacimiento_path = await guardar_archivo(formulario.acta_nacimiento, f"{formulario.curp}_acta.{formulario.acta_nacimiento.filename.split('.')[-1]}") if formulario.acta_nacimiento else None
+
+    campos_formulario = formulario.dict(exclude_unset=True)
+    campos_formulario.update({
+        "ine_frontal": ine_frontal_path,
+        "ine_reverso": ine_reverso_path,
+        "acta_nacimiento": acta_nacimiento_path
+    })
+
+    nuevo_formulario = FormularioModel(**campos_formulario)
 
     try:
         db.add(nuevo_formulario)
@@ -64,7 +48,6 @@ async def create_formulario(formulario: FormularioSchema ,db: Session):
         db.refresh(nuevo_formulario)
         return {"mensaje": "Formulario registrado con éxito", "id": nuevo_formulario.id}
     except Exception as e:
-        # Si hay error, eliminar los archivos guardados
         for path in [ine_frontal_path, ine_reverso_path, acta_nacimiento_path]:
             if path and os.path.exists(path):
                 os.remove(path)
