@@ -5,6 +5,7 @@ from google.cloud import storage
 from google.oauth2 import service_account
 from app.db.models import Formulario as FormularioModel
 from app.schemas import FormularioMultipart as FormularioSchema
+import logging
 
 GOOGLE_CREDENTIALS_PATH = os.getenv('PATH_KEYS_JSON', '')
 BUCKET_NAME = os.getenv('BUCKET_NAME', '')
@@ -31,6 +32,8 @@ async def subir_archivo(file, filename):
 async def create_formulario(formulario: FormularioSchema, db: Session):
     validar_formulario(formulario)
 
+    logging.info("Validando formulario...")
+
     campos = formulario.dict(exclude_unset=True)
     campos.update({"ine_frontal": None, "ine_reverso": None, "acta_nacimiento": None})
     nuevo_formulario = FormularioModel(**campos)
@@ -51,6 +54,7 @@ async def create_formulario(formulario: FormularioSchema, db: Session):
         carpeta_curp = f"{formulario.nombre} {formulario.apellido_paterno} {formulario.apellido_materno} - {formulario.curp}/"
 
         for campo, archivo in uploads.items():
+            logging.info("entrando al for")
             if archivo:
                 ext = archivo.filename.split('.')[-1]
                 filename = f"{carpeta_curp}{campo}.{ext}"
