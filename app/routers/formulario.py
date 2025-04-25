@@ -10,7 +10,7 @@ router = APIRouter(
     tags=["Formulario"]
 )
 
-@router.post("/enviar_formulario")
+@router.post("/enviar_formulario/")
 async def enviar_formulario(
     formulario: FormularioMultipart = Depends(),
     db: Session = Depends(get_db)
