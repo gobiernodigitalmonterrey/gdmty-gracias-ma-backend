@@ -3,6 +3,14 @@ from sqlalchemy import Column,Integer,String,Float,DateTime
 from datetime import datetime
 from sqlalchemy.orm import relationship
 
+
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer,primary_key=True,autoincrement=True)
+    username = Column(String(50),nullable=False)
+    email = Column(String(50),nullable=False)
+    password = Column(String(128),nullable=False)
+
 class Formulario(Base):
     __tablename__ = "formulario"
     id = Column(Integer, primary_key=True, index=True)

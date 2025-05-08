@@ -4,6 +4,7 @@ from app.db.database import Base, engine, get_db
 import tracemalloc
 import logging
 from app.routers import formulario
+from app.routers import auth
 
 
 tracemalloc.start()
@@ -14,8 +15,9 @@ app = FastAPI()
 
 origins = [
     "http://localhost",
-    "http://localhost:8080",
-    "http://127.0.0.1:5500"
+    "http://localhost:9000",
+    "http://127.0.0.1",
+    "http://127.0.0.1:9000"
 ]
 
 app.add_middleware(
@@ -40,3 +42,4 @@ create_tables()
 
 # app.include_router(admin.router)
 app.include_router(formulario.router)
+app.include_router(auth.router)
