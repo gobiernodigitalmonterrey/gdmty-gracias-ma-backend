@@ -3,6 +3,9 @@ from pydantic import BaseModel
 from typing import Type, get_type_hints, Optional, Any
 import inspect
 
+
+
+
 def as_form(cls: Type[BaseModel]):
     """
     Convierte un modelo de Pydantic en compatible con FastAPI para recibir datos desde un formulario HTML (multipart/form-data).
