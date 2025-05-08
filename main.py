@@ -7,6 +7,8 @@ from app.routers import formulario
 from app.routers import auth
 
 
+
+
 tracemalloc.start()
 
 logging.basicConfig(level=logging.INFO)
