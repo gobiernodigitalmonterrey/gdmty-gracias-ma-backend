@@ -7,7 +7,7 @@ pipeline {
     stages {
         stage('Clonar repositorio') {
             steps {
-                git branch: 'deploy-dev', url: 'https://github.com/gobiernodigitalmonterrey/gdmty-gracias-ma-backend.git'
+                git branch: 'main', url: 'https://github.com/gobiernodigitalmonterrey/gdmty-gracias-ma-backend.git'
             }
         }
 
