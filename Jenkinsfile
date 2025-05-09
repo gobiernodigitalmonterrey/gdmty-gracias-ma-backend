@@ -39,91 +39,55 @@ pipeline {
             }
         }
 
-        stage('Crear script de servicio') {
-            steps {
-                script {
-                    // Crear directorio para logs
-                    sh 'mkdir -p ${WORKSPACE}/logs'
+       stage('Iniciar servicio') {
+        steps {
+            script {
+                def serviceName = 'prueba_fastapi_main'
+                def servicePath = "/etc/systemd/system/${serviceName}.service"
+                def workingDir = "${env.WORKSPACE}"
+                def gunicornPath = "${env.WORKSPACE}/.venv/bin/gunicorn"
 
-                    // Crear script de servicio persistente
-                    writeFile file: "${WORKSPACE}/run_service.sh", text: """#!/bin/bash
-# Script para ejecutar la aplicación FastAPI como un servicio persistente
-cd ${WORKSPACE}
+                sh """
+                if [ ! -f ${servicePath} ]; then
+                    echo "Creando archivo de servicio systemd para ${serviceName}..."
 
-# Log de inicio
-echo "Iniciando servicio FastAPI en \$(date)" >> ${WORKSPACE}/logs/service.log
+                    echo "[Unit]" > ${serviceName}.service
+                    echo "Description=Gunicorn para proyecto FastAPI (${serviceName})" >> ${serviceName}.service
+                    echo "After=network.target" >> ${serviceName}.service
+                    echo "" >> ${serviceName}.service
+                    echo "[Service]" >> ${serviceName}.service
+                    echo "User=root" >> ${serviceName}.service
+                    echo "Group=root" >> ${serviceName}.service
+                    echo "WorkingDirectory=${workingDir}" >> ${serviceName}.service
+                    echo "ExecStart=${gunicornPath} --workers 3 --bind 0.0.0.0:5000 main:app" >> ${serviceName}.service
+                    echo "EnvironmentFile=${workingDir}/.env" >> ${serviceName}.service
+                    echo "Restart=always" >> ${serviceName}.service
+                    echo "" >> ${serviceName}.service
+                    echo "[Install]" >> ${serviceName}.service
+                    echo "WantedBy=multi-user.target" >> ${serviceName}.service
 
-# Establecer variables de entorno desde .env
-set -a
-[ -f ${WORKSPACE}/.env ] && . ${WORKSPACE}/.env
-set +a
+                    sudo mv ${serviceName}.service ${servicePath}
+                    sudo systemctl daemon-reload
+                    sudo systemctl enable ${serviceName}
+                else
+                    echo "El archivo ${servicePath} ya existe. Usando configuración existente."
+                fi
 
-# Detener instancias previas
-PID_FILE=${WORKSPACE}/app.pid
-if [ -f \$PID_FILE ]; then
-    OLD_PID=\$(cat \$PID_FILE)
-    if ps -p \$OLD_PID > /dev/null; then
-        echo "Deteniendo proceso anterior: \$OLD_PID" >> ${WORKSPACE}/logs/service.log
-        kill \$OLD_PID || true
-        sleep 2
-    fi
-fi
+                sudo systemctl restart ${serviceName}
+                sleep 3
 
-# Iniciar la aplicación con nohup para que persista
-export PYTHONPATH=${WORKSPACE}
-nohup ${WORKSPACE}/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 5000 --log-level debug > ${WORKSPACE}/logs/app.log 2>&1 &
-
-# Guardar el PID para futura referencia
-echo \$! > \$PID_FILE
-echo "Servicio iniciado con PID: \$(cat \$PID_FILE) en \$(date)" >> ${WORKSPACE}/logs/service.log
-
-# Verificar que el proceso esté realmente corriendo después de un breve período
-sleep 5
-if ps -p \$(cat \$PID_FILE) > /dev/null; then
-    echo "Servicio verificado y en ejecución" >> ${WORKSPACE}/logs/service.log
-    exit 0
-else
-    echo "ERROR: El servicio no pudo iniciarse correctamente" >> ${WORKSPACE}/logs/service.log
-    cat ${WORKSPACE}/logs/app.log >> ${WORKSPACE}/logs/service.log
-    exit 1
-fi
-"""
-
-                    // Hacer ejecutable el script
-                    sh "chmod +x ${WORKSPACE}/run_service.sh"
-                }
+                if systemctl is-active --quiet ${serviceName}; then
+                    echo "✅ Servicio ${serviceName} iniciado correctamente."
+                else
+                    echo "❌ Error al iniciar el servicio ${serviceName}"
+                    journalctl -u ${serviceName} --no-pager -n 50
+                    exit 1
+                fi
+                """
             }
         }
+    }
 
-        stage('Iniciar servicio') {
-            steps {
-                script {
-                    // Ejecutar el script de servicio
-                    sh "${WORKSPACE}/run_service.sh"
-
-                    // Verificar que el servicio esté corriendo
-                    sh """
-                    sleep 3
-                    if [ -f ${WORKSPACE}/app.pid ] && ps -p \$(cat ${WORKSPACE}/app.pid) > /dev/null; then
-                        echo "Servicio iniciado correctamente con PID: \$(cat ${WORKSPACE}/app.pid)"
-                    else
-                        echo "Error al iniciar el servicio"
-                        cat ${WORKSPACE}/logs/app.log
-                        exit 1
-                    fi
-                    """
-
-                    // Verificar logs para diagnóstico
-                    sh """
-                    echo "=== LOGS DE LA APLICACIÓN ==="
-                    cat ${WORKSPACE}/logs/app.log || echo "No hay logs de la aplicación"
-
-                    echo "=== LOGS DEL SERVICIO ==="
-                    cat ${WORKSPACE}/logs/service.log || echo "No hay logs del servicio"
-                    """
-                }
-            }
-        }
 
         stage('Verificar API') {
             steps {
