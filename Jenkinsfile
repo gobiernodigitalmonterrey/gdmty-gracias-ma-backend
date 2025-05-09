@@ -14,6 +14,8 @@ pipeline {
         stage('Preparar entorno') {
             steps {
                 script {
+                    // verificamos la version del piton
+                    sh 'python3 --version'
                     // Crear el entorno virtual
                     sh 'python3 -m venv ${VENV_PATH}'
                     // Actualizar pip
