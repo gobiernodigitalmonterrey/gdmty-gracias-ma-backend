@@ -23,7 +23,7 @@ pipeline {
                     // Limpiar caché de pip
                     sh './.venv/bin/pip cache purge'
                     // Instalar dependencias
-                    sh './.venv/bin/pip install --no-binary :all: -r ${REQUIREMENTS}'
+                    sh './.venv/bin/pip install --no-cache-dir -r ${REQUIREMENTS}'
                     // Instalar python-dotenv
                     sh './.venv/bin/pip install python-dotenv'
                 }
