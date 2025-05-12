@@ -19,3 +19,5 @@ class Formulario(Base):
     ine_frontal = Column(String(255), nullable=True)
     ine_reverso = Column(String(255), nullable=True)
     acta_nacimiento = Column(String(255), nullable=True)
+
+
